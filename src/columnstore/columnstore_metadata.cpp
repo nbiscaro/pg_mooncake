@@ -34,6 +34,7 @@ Datum StringGetTextDatum(const string_t &s) {
 constexpr int x_tables_natts = 3;
 constexpr int x_data_files_natts = 3;
 constexpr int x_secrets_natts = 5;
+constexpr int x_rowstore_oids_natts = 2;
 
 Oid Mooncake() {
     return get_namespace_oid("mooncake", false /*missing_ok*/);
@@ -55,6 +56,12 @@ Oid DataFilesFileName() {
 }
 Oid Secrets() {
     return get_relname_relid("secrets", Mooncake());
+}
+Oid Rowstores() {
+    return get_relname_relid("rowstores", Mooncake());
+}
+Oid RowstoresColumnstoreOids() {
+    return get_relname_relid("rowstores_columnstore_oids", Mooncake());
 }
 
 } // namespace
@@ -302,6 +309,58 @@ std::tuple<string /*type*/, string /*options*/> ColumnstoreMetadata::SecretsSear
     systable_endscan(scan);
     table_close(table, AccessShareLock);
     return {type, options};
+}
+
+void ColumnstoreMetadata::RowstoreOidsInsert(Oid columnstore_oid, Oid rowstore_oid) {
+    ::Relation table = table_open(Rowstores(), RowExclusiveLock);
+    TupleDesc desc = RelationGetDescr(table);
+    Datum values[x_rowstore_oids_natts] = {columnstore_oid, rowstore_oid};
+    bool isnull[x_rowstore_oids_natts] = {false, false};
+    HeapTuple tuple = heap_form_tuple(desc, values, isnull);
+    PostgresFunctionGuard(CatalogTupleInsert, table, tuple);
+    CommandCounterIncrement();
+    table_close(table, RowExclusiveLock);
+}
+
+void ColumnstoreMetadata::RowstoreOidsDelete(Oid columnstore_oid) {
+    ::Relation table = table_open(Rowstores(), RowExclusiveLock);
+    ::Relation index = index_open(RowstoresColumnstoreOids(), RowExclusiveLock);
+    ScanKeyData key[1];
+    ScanKeyInit(&key[0], 1 /*attributeNumber*/, BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(columnstore_oid));
+    SysScanDesc scan = systable_beginscan_ordered(table, index, snapshot, 1 /*nkeys*/, key);
+
+    HeapTuple tuple;
+    while (HeapTupleIsValid(tuple = systable_getnext_ordered(scan, ForwardScanDirection))) {
+        PostgresFunctionGuard(CatalogTupleDelete, table, &tuple->t_self);
+    }
+
+    systable_endscan_ordered(scan);
+    CommandCounterIncrement();
+    index_close(index, RowExclusiveLock);
+    table_close(table, RowExclusiveLock);
+}
+
+Oid ColumnstoreMetadata::RowstoreOidsFetch(Oid columnstore_oid) {
+    ::Relation table = table_open(Rowstores(), AccessShareLock);
+    ::Relation index = index_open(RowstoresColumnstoreOids(), AccessShareLock);
+    TupleDesc desc = RelationGetDescr(table);
+    ScanKeyData key[1];
+    ScanKeyInit(&key[0], 1 /*attributeNumber*/, BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(columnstore_oid));
+    SysScanDesc scan = systable_beginscan_ordered(table, index, snapshot, 1 /*nkeys*/, key);
+
+    Oid rowstore_oid = InvalidOid;
+    HeapTuple tuple;
+    Datum values[x_rowstore_oids_natts];
+    bool isnull[x_rowstore_oids_natts];
+    if (HeapTupleIsValid(tuple = systable_getnext_ordered(scan, ForwardScanDirection))) {
+        heap_deform_tuple(tuple, desc, values, isnull);
+        rowstore_oid = DatumGetObjectId(values[1]);
+    }
+
+    systable_endscan_ordered(scan);
+    index_close(index, AccessShareLock);
+    table_close(table, AccessShareLock);
+    return rowstore_oid;
 }
 
 } // namespace duckdb

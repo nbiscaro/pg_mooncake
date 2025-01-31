@@ -31,6 +31,10 @@ public:
     vector<string> SecretsGetDuckdbQueries();
     std::tuple<string /*type*/, string /*options*/> SecretsSearchDeltaOptions(const string &path);
 
+    void RowstoreOidsInsert(Oid columnstore_oid, Oid rowstore_oid);
+    void RowstoreOidsDelete(Oid columnstore_oid);
+    Oid RowstoreOidsFetch(Oid columnstore_oid);
+
 private:
     Snapshot snapshot;
 };
