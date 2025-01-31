@@ -20,6 +20,12 @@ CREATE TABLE mooncake.data_files (
 CREATE INDEX data_files_oid ON mooncake.data_files (oid);
 CREATE UNIQUE INDEX data_files_file_name ON mooncake.data_files (file_name);
 
+CREATE TABLE mooncake.rowstores (
+    columnstore_oid OID NOT NULL,
+    rowstore_oid OID NOT NULL
+);
+CREATE UNIQUE INDEX rowstores_columnstore_oid ON mooncake.rowstores (columnstore_oid);
+
 CREATE FUNCTION mooncake.read_parquet(path text, binary_as_string BOOLEAN DEFAULT FALSE,
                                                    filename BOOLEAN DEFAULT FALSE,
                                                    file_row_number BOOLEAN DEFAULT FALSE,
