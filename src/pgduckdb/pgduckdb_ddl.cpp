@@ -2,6 +2,7 @@
 #include <regex>
 
 #include "columnstore_handler.hpp"
+#include "columnstore/columnstore_metadata.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
@@ -100,6 +101,46 @@ DuckdbHandleDDL(Node *parsetree) {
 	}
 }
 
+static Oid CreateRowstoreTable(Oid columnstore_oid, CreateStmt *stmt) {
+    std::string rowstore_name = "__mooncake_rowstore_" + std::to_string(columnstore_oid);
+
+    Relation columnstore_rel = table_open(columnstore_oid, AccessShareLock);
+    Oid schema_oid = RelationGetNamespace(columnstore_rel);
+    const char *table_name = RelationGetRelationName(columnstore_rel);
+    table_close(columnstore_rel, AccessShareLock);
+
+    char *schema_name = get_namespace_name(schema_oid);
+
+    std::string create_sql = "CREATE TABLE ";
+    create_sql += quote_identifier(schema_name);
+    create_sql += ".";
+    create_sql += quote_identifier(rowstore_name.c_str());
+    create_sql += " (LIKE ";
+    create_sql += quote_identifier(schema_name);
+    create_sql += ".";
+    create_sql += quote_identifier(table_name);
+    create_sql += " INCLUDING ALL)";
+
+    if (SPI_connect() != SPI_OK_CONNECT) {
+        ereport(ERROR, (errmsg("SPI_connect() failed")));
+    }
+    if (SPI_execute(create_sql.c_str(), false /* read_only */, 0 /* tcount */) != SPI_OK_UTILITY) {
+        SPI_finish();
+        ereport(ERROR,
+                (errmsg("Failed to create rowstore table: %s", create_sql.c_str())));
+    }
+    CommandCounterIncrement();
+    SPI_finish();
+
+    Oid rowstore_oid = get_relname_relid(rowstore_name.c_str(), schema_oid);
+    if (!OidIsValid(rowstore_oid)) {
+        ereport(ERROR, (errmsg("Failed to retrieve OID for rowstore table: %s",
+                               rowstore_name.c_str())));
+    }
+
+    return rowstore_oid;
+}
+
 static void
 MooncakeHandleDDL(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
                   ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, QueryCompletion *qc) {
@@ -123,6 +164,23 @@ MooncakeHandleDDL(PlannedStmt *pstmt, const char *query_string, bool read_only_t
 				pgduckdb::DuckDBQueryOrThrow(*connection, insert_string);
 				PopActiveSnapshot();
 			}
+			return;
+		}
+	}
+
+	if (IsA(parsetree, CreateStmt)) {
+		auto stmt = castNode(CreateStmt, parsetree);
+		char *access_method = stmt->accessMethod ? stmt->accessMethod : default_table_access_method;
+		if (strcmp(access_method, "columnstore") == 0) {
+			// Let the utility hook handle original table creation. Afterwards we can reference the table and its schema to create our rowstore mirror.
+			prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
+
+			auto columnstore_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false /*missing_ok*/);
+			auto rowstore_oid = CreateRowstoreTable(columnstore_oid, stmt);
+
+			duckdb::ColumnstoreMetadata metadata(NULL /*snapshot*/);
+			metadata.RowstoreOidsInsert(columnstore_oid, rowstore_oid);
+
 			return;
 		}
 	}
