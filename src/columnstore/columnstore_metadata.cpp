@@ -152,6 +152,15 @@ ColumnstoreMetadata::GetTableMetadata(Oid oid) {
     return {std::move(table_name), std::move(column_names), std::move(column_types)};
 }
 
+string ColumnstoreMetadata::GetSchemaName(Oid oid) {
+    ::Relation table = table_open(oid, AccessShareLock);
+    string schema_name = get_namespace_name(RelationGetNamespace(table));
+    table_close(table, AccessShareLock);
+    return schema_name;
+
+
+}
+
 void ColumnstoreMetadata::DataFilesInsert(Oid oid, const string &file_name, const string_t &file_metadata) {
     ::Relation table = table_open(DataFiles(), RowExclusiveLock);
     TupleDesc desc = RelationGetDescr(table);

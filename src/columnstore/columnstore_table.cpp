@@ -2,6 +2,7 @@
 #include "columnstore/columnstore_metadata.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 #include "lake/lake.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
@@ -91,6 +92,22 @@ public:
         return {file_size, std::move(file_metadata)};
     }
 
+    void FlushCollectionToHeap(ClientContext &context, Catalog &catalog, string schema_name, string table_name) {
+        if (collection.Count() == 0) {
+            return;
+        }
+
+        auto &rowstore_entry = catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
+        auto &data_table = rowstore_entry.GetStorage();
+        data_table.LocalAppend(rowstore_entry, context, collection, {});
+
+        collection.Reset();
+    }
+
+    bool ShouldFlushToRowstore() {
+        return collection.Count() < x_row_group_size || collection.SizeInBytes() < x_row_group_size_bytes;
+    }
+
 private:
     static const idx_t x_row_group_size = duckdb::Storage::ROW_GROUP_SIZE;
     static const idx_t x_row_group_size_bytes = x_row_group_size * 1024;
@@ -123,6 +140,15 @@ public:
             FinalizeDataFile();
         }
     }
+
+    bool ShouldFlushToRowstore() {
+        return writer->ShouldFlushToRowstore();
+    }
+
+    void FlushCollectionToHeap(ClientContext &context, Catalog &catalog, string schema_name, string table_name) {
+        writer->FlushCollectionToHeap(context, catalog, schema_name, table_name);
+    }
+
 
     void Finalize() {
         if (writer) {
@@ -173,8 +199,15 @@ void ColumnstoreTable::Insert(ClientContext &context, DataChunk &chunk) {
     writer->Write(context, chunk);
 }
 
-void ColumnstoreTable::FinalizeInsert() {
+void ColumnstoreTable::FinalizeInsert(ClientContext &context) {
     if (writer) {
+        if (writer->ShouldFlushToRowstore()) {
+            auto &catalog = Catalog::GetSystemCatalog(context);
+            auto schema_name = metadata->GetSchemaName(oid);
+            auto table_name = "__mooncake_rowstore_" + to_string(oid);
+            writer->FlushCollectionToHeap(context, catalog, schema_name, table_name);
+        }
+
         writer->Finalize();
         writer.reset();
     }
@@ -239,7 +272,7 @@ void ColumnstoreTable::Delete(ClientContext &context, unordered_set<row_t> &row_
         metadata->DataFilesDelete(file_names[file_number]);
         LakeDeleteFile(oid, file_names[file_number]);
     }
-    FinalizeInsert();
+    FinalizeInsert(context);
 }
 
 vector<string> ColumnstoreTable::GetFilePaths(const string &path, const vector<string> &file_names) {

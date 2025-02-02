@@ -28,7 +28,7 @@ public:
 public:
     void Insert(ClientContext &context, DataChunk &chunk);
 
-    void FinalizeInsert();
+    void FinalizeInsert(ClientContext &context);
 
     void Delete(ClientContext &context, unordered_set<row_t> &row_ids_set,
                 ColumnDataCollection *return_collection = nullptr);

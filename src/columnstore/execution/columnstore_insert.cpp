@@ -109,7 +109,7 @@ public:
 
     SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                               OperatorSinkFinalizeInput &input) const override {
-        table.FinalizeInsert();
+        table.FinalizeInsert(context);
         return SinkFinalizeType::READY;
     }
 
