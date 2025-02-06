@@ -35,12 +35,14 @@ public:
 
 private:
     vector<string> GetFilePaths(const string &path, const vector<string> &file_names);
+    bool ShouldRouteToRowstore();
 
 private:
     Oid oid;
     unique_ptr<ColumnstoreMetadata> metadata;
     string path;
     unique_ptr<ColumnstoreWriter> writer;
+    idx_t rowstore_size {0}; // TODO: we should init this with the current rowstore size that we fetch from metadata
 };
 
 } // namespace duckdb

@@ -2,6 +2,7 @@
 #include "columnstore/columnstore_metadata.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 #include "lake/lake.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
@@ -166,7 +167,24 @@ TableStorageInfo ColumnstoreTable::GetStorageInfo(ClientContext &context) {
     return result;
 }
 
+bool ColumnstoreTable::ShouldRouteToRowstore() {
+    // route to rowstore if total inserted rows so far is less than threshold
+
+    // what if rowstore is already very full for this table
+
+    // we should check its size first 
+
+    // extend this to check both row count and byte size
+    return rowstore_size < STANDARD_ROW_GROUPS_SIZE;
+}
+
 void ColumnstoreTable::Insert(ClientContext &context, DataChunk &chunk) {
+    if (ShouldRouteToRowstore()) {
+        metadata->InsertIntoRowstore(context, chunk, oid);
+        rowstore_size += chunk.size();
+        return;
+    }
+
     if (!writer) {
         writer = make_uniq<ColumnstoreWriter>(oid, *metadata, path, columns.GetColumnTypes(), columns.GetColumnNames());
     }

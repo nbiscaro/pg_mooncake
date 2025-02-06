@@ -27,6 +27,8 @@ extern "C" {
 #include "commands/event_trigger.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
+#include "catalog/heap.h"
+#include "catalog/pg_am_d.h"
 
 #include "pgduckdb/vendor/pg_ruleutils.h"
 #include "pgduckdb/pgduckdb_ruleutils.h"
@@ -101,43 +103,74 @@ DuckdbHandleDDL(Node *parsetree) {
 	}
 }
 
-static Oid CreateRowstoreTable(Oid columnstore_oid, CreateStmt *stmt) {
-    std::string rowstore_name = "__mooncake_rowstore_" + std::to_string(columnstore_oid);
+// List CreateRowstoreTableSettings() {
+//     List *deflist = NIL;
+//     deflist = lappend(deflist,
+//                      makeDefElem("fillfactor",
+//                                (Node *) makeInteger(70),
+//                                -1));
+//     deflist = lappend(deflist,
+//                      makeDefElem("autovacuum_enabled",
+//                                (Node *) makeInteger(0),
+//                                -1));
+//     deflist = lappend(deflist,
+//                      makeDefElem("toast_tuple_target",
+//                                (Node *) makeInteger(2048),
+//                                -1));
 
+    // Datum reloptions = transformRelOptions(0,     // oldOptions
+    //                                      deflist, // defList
+    //                                      "heap",  // namespace
+    //                                      NULL,    // validnsps
+    //                                      false,   // acceptOidsOff
+    //                                      false);  // isReset
+
+    // heap_reloptions(RELKIND_RELATION, reloptions, true);
+    
+// }
+
+Oid CreateRowstoreTable(Oid columnstore_oid) {
     Relation columnstore_rel = table_open(columnstore_oid, AccessShareLock);
     Oid schema_oid = RelationGetNamespace(columnstore_rel);
-    const char *table_name = RelationGetRelationName(columnstore_rel);
+    TupleDesc tupdesc = CreateTupleDescCopy(RelationGetDescr(columnstore_rel));
+    Oid owner_id = RelationGetForm(columnstore_rel)->relowner;
     table_close(columnstore_rel, AccessShareLock);
+    
+    std::string rowstore_name = "__mooncake_rowstore_" + std::to_string(columnstore_oid);
+    
+    Oid rowstore_oid = heap_create_with_catalog(
+        rowstore_name.c_str(),      // relname
+        schema_oid,                 // relnamespace
+        InvalidOid,                 // reltablespace (default)
+        InvalidOid,                 // relid (system will assign)
+        InvalidOid,                 // reltypeid
+        InvalidOid,                 // reloftypeid
+        owner_id,                   // ownerid
+        HEAP_TABLE_AM_OID,         // accessmtd
+        tupdesc,                    // tupdesc
+        NIL,                        // cooked_constraints
+        RELKIND_RELATION,          // relkind
+        RELPERSISTENCE_PERMANENT,  // relpersistence
+        false,                     // shared_relation
+        true,                      // mapped_relation
+        ONCOMMIT_NOOP,              // oncommit
+        (Datum) 0,                // reloptions
+        true,                      // use_user_acl
+        false,                     // allow_system_table_mods
+        true,                      // is_internal
+        InvalidOid,                // relrewrite
+        NULL                       // typaddress
+    );
 
-    char *schema_name = get_namespace_name(schema_oid);
-
-    std::string create_sql = "CREATE TABLE ";
-    create_sql += quote_identifier(schema_name);
-    create_sql += ".";
-    create_sql += quote_identifier(rowstore_name.c_str());
-    create_sql += " (LIKE ";
-    create_sql += quote_identifier(schema_name);
-    create_sql += ".";
-    create_sql += quote_identifier(table_name);
-    create_sql += " INCLUDING ALL)";
-
-    if (SPI_connect() != SPI_OK_CONNECT) {
-        ereport(ERROR, (errmsg("SPI_connect() failed")));
-    }
-    if (SPI_execute(create_sql.c_str(), false /* read_only */, 0 /* tcount */) != SPI_OK_UTILITY) {
-        SPI_finish();
-        ereport(ERROR,
-                (errmsg("Failed to create rowstore table: %s", create_sql.c_str())));
-    }
+    
     CommandCounterIncrement();
-    SPI_finish();
-
-    Oid rowstore_oid = get_relname_relid(rowstore_name.c_str(), schema_oid);
+    
     if (!OidIsValid(rowstore_oid)) {
-        ereport(ERROR, (errmsg("Failed to retrieve OID for rowstore table: %s",
-                               rowstore_name.c_str())));
+        ereport(ERROR,
+                (errcode(ERRCODE_INTERNAL_ERROR),
+                 errmsg("Failed to create rowstore table for columnstore %u", columnstore_oid)));
     }
-
+    
     return rowstore_oid;
 }
 
@@ -176,7 +209,7 @@ MooncakeHandleDDL(PlannedStmt *pstmt, const char *query_string, bool read_only_t
 			prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
 
 			auto columnstore_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false /*missing_ok*/);
-			auto rowstore_oid = CreateRowstoreTable(columnstore_oid, stmt);
+			auto rowstore_oid = CreateRowstoreTable(columnstore_oid);
 
 			duckdb::ColumnstoreMetadata metadata(NULL /*snapshot*/);
 			metadata.RowstoreOidsInsert(columnstore_oid, rowstore_oid);

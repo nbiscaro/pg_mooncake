@@ -11,6 +11,7 @@ extern "C" {
 #include "access/table.h"
 #include "access/xact.h"
 #include "catalog/indexing.h"
+#include "access/heapam.h"
 #include "catalog/namespace.h"
 #include "commands/dbcommands.h"
 #include "miscadmin.h"
@@ -61,7 +62,7 @@ Oid Rowstores() {
     return get_relname_relid("rowstores", Mooncake());
 }
 Oid RowstoresColumnstoreOids() {
-    return get_relname_relid("rowstores_columnstore_oids", Mooncake());
+    return get_relname_relid("rowstores_columnstore_oid", Mooncake());
 }
 
 } // namespace
@@ -150,6 +151,15 @@ ColumnstoreMetadata::GetTableMetadata(Oid oid) {
     }
     table_close(table, AccessShareLock);
     return {std::move(table_name), std::move(column_names), std::move(column_types)};
+}
+
+string ColumnstoreMetadata::GetSchemaName(Oid oid) {
+    ::Relation table = table_open(oid, AccessShareLock);
+    string schema_name = get_namespace_name(RelationGetNamespace(table));
+    table_close(table, AccessShareLock);
+    return schema_name;
+
+
 }
 
 void ColumnstoreMetadata::DataFilesInsert(Oid oid, const string &file_name, const string_t &file_metadata) {
@@ -361,6 +371,51 @@ Oid ColumnstoreMetadata::RowstoreOidsFetch(Oid columnstore_oid) {
     index_close(index, AccessShareLock);
     table_close(table, AccessShareLock);
     return rowstore_oid;
+}
+
+Datum ConvertDuckDBValueToDatum(Vector &duck_vector, idx_t row_idx, Oid pg_type_oid) {
+	Value val = duck_vector.GetValue(row_idx);
+	if (val.IsNull()) {
+		return (Datum)0;
+	}
+
+	string val_str = val.ToString();
+
+	Oid input_func;
+	Oid type_io_param;
+	getTypeInputInfo(pg_type_oid, &input_func, &type_io_param);
+
+	char *c_str = const_cast<char *>(val_str.c_str());
+	Datum pg_datum = OidInputFunctionCall(input_func, c_str, type_io_param, -1);
+
+	return pg_datum;
+}
+
+void ColumnstoreMetadata::InsertIntoRowstore(ClientContext &context, DataChunk &chunk, Oid columnstore_oid) {
+    Oid rowstore_oid = RowstoreOidsFetch(columnstore_oid);
+    ::Relation table = table_open(rowstore_oid, RowExclusiveLock);
+    TupleDesc desc = RelationGetDescr(table);
+    
+    for (idx_t i = 0; i < chunk.size(); i++) {
+        Datum values[chunk.ColumnCount()];
+        bool nulls[chunk.ColumnCount()];
+        
+        for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
+            Vector &vector = chunk.data[col_idx];
+            nulls[col_idx] = FlatVector::IsNull(vector, i);
+            if (!nulls[col_idx]) {
+                const auto &attr = TupleDescAttr(desc, col_idx);
+                Oid pg_type_oid = attr->atttypid;
+                values[col_idx] = ConvertDuckDBValueToDatum(vector, i, pg_type_oid);
+            }
+        }
+        
+        HeapTuple tuple = heap_form_tuple(desc, values, nulls);
+        PostgresFunctionGuard(CatalogTupleInsert, table, tuple);
+    }
+    
+    CommandCounterIncrement();
+    table_close(table, RowExclusiveLock);
 }
 
 } // namespace duckdb

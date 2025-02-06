@@ -2,6 +2,7 @@
 
 #include "duckdb/common/vector.hpp"
 #include "pgduckdb/pg/declarations.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 
 namespace duckdb {
 
@@ -22,6 +23,8 @@ public:
     std::tuple<string /*table_name*/, vector<string> /*column_names*/, vector<string> /*column_types*/>
     GetTableMetadata(Oid oid);
 
+    string GetSchemaName(Oid oid);
+
     void DataFilesInsert(Oid oid, const string &file_name, const string_t &file_metadata);
     void DataFilesDelete(const string &file_name);
     void DataFilesDelete(Oid oid);
@@ -34,6 +37,8 @@ public:
     void RowstoreOidsInsert(Oid columnstore_oid, Oid rowstore_oid);
     void RowstoreOidsDelete(Oid columnstore_oid);
     Oid RowstoreOidsFetch(Oid columnstore_oid);
+
+    void InsertIntoRowstore(ClientContext &context, DataChunk &chunk, Oid rowstore_oid);
 
 private:
     Snapshot snapshot;
