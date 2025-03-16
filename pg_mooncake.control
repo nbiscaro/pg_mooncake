@@ -1,0 +1,5 @@
+comment = 'Postgres-Native Data Warehouse'
+default_version = '@CARGO_VERSION@'
+module_pathname = '$libdir/pg_mooncake'
+relocatable = false
+superuser = true
