@@ -3,6 +3,7 @@ FROM mcr.microsoft.com/devcontainers/rust:latest
 RUN apt update \
  && apt install -y \
     bison \
+    clang-format \
     cmake \
     flex \
     libclang-dev \
