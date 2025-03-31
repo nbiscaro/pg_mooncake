@@ -20,7 +20,10 @@ pg17 = ["pgrx/pg17", "pgrx-tests/pg17" ]
 pg_test = []
 
 [dependencies]
+bincode = "2"
 pgrx = "0.13.1"
+thiserror = "2"
+tokio = { version = "1.44", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal"] }
 
 [dev-dependencies]
 pgrx-tests = "0.13.1"

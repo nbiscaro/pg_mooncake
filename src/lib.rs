@@ -1,3 +1,5 @@
+mod error;
+mod pgmoonlink;
 mod table_am;
 
 use pgrx::prelude::*;
@@ -12,4 +14,5 @@ extern "C" {
 #[pg_guard]
 extern "C" fn _PG_init() {
     unsafe { pgduckdb_init() };
+    pgmoonlink::init();
 }
