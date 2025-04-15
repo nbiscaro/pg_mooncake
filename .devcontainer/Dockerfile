@@ -16,3 +16,10 @@ RUN cargo install --locked cargo-pgrx \
  && cargo pgrx init
 
 RUN echo '\\i /workspaces/pg_mooncake/.devcontainer/.psqlrc' > ~/.psqlrc
+
+RUN cat > ~/.pgrx/data-17/postgresql.conf <<EOF
+wal_level = logical
+shared_preload_libraries = 'pg_mooncake'
+EOF
+
+RUN wget -P ~ https://raw.githubusercontent.com/cmrschwarz/rust-prettifier-for-lldb/refs/heads/main/rust_prettifier_for_lldb.py
