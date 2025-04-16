@@ -28,8 +28,6 @@ extern "C" fn mooncake_scan_end(
 ) {
     let schema = unsafe { CStr::from_ptr(schema).to_str().unwrap().to_string() };
     let table = unsafe { CStr::from_ptr(table).to_str().unwrap().to_string() };
-    unsafe {
-        Vec::from_raw_parts(data, len, len);
-    }
+    unsafe { Vec::from_raw_parts(data, len, len) };
     let _ = scan_end(schema, table);
 }
