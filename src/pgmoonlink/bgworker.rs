@@ -14,7 +14,7 @@ pub fn init() {
 
 #[pg_guard]
 #[no_mangle]
-extern "C" fn pgmoonlink_main(_arg: pg_sys::Datum) {
+extern "C-unwind" fn pgmoonlink_main(_arg: pg_sys::Datum) {
     BackgroundWorker::attach_signal_handlers(SignalWakeFlags::SIGTERM);
     server::start().unwrap();
 }

@@ -2,14 +2,19 @@ use super::common::*;
 use super::table_metadata::TableMetadata;
 use crate::error::Result;
 use bincode::{Decode, Encode};
+use moonlink_backend::MoonlinkBackend;
+use std::sync::LazyLock;
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::signal::unix::{signal, SignalKind};
 
+static BACKEND: LazyLock<MoonlinkBackend> = LazyLock::new(|| MoonlinkBackend::new());
+
 #[tokio::main]
 pub(super) async fn start() -> Result<()> {
     let mut sigterm = signal(SignalKind::terminate())?;
+    LazyLock::force(&BACKEND);
     if fs::metadata(SOCKET_PATH).await.is_ok() {
         fs::remove_file(SOCKET_PATH).await?;
     }
@@ -28,25 +33,45 @@ pub(super) async fn start() -> Result<()> {
 async fn handle_stream(mut stream: UnixStream) -> Result<()> {
     loop {
         match read(&mut stream).await? {
-            Request::ScanBegin { schema, table } => scan_begin(&mut stream, schema, table).await?,
-            Request::ScanEnd { schema, table } => scan_end(&mut stream, schema, table).await?,
+            Request::CreateTable { schema, table } => {
+                create_table(&mut stream, schema, table).await?
+            }
+            Request::ScanTableBegin { schema, table } => {
+                scan_table_begin(&mut stream, schema, table).await?
+            }
+            Request::ScanTableEnd { schema, table } => {
+                scan_table_end(&mut stream, schema, table).await?
+            }
         }
     }
 }
 
-async fn scan_begin(stream: &mut UnixStream, _schame: String, _table: String) -> Result<()> {
+async fn create_table(stream: &mut UnixStream, schema: String, table: String) -> Result<()> {
+    let table_id = BACKEND
+        .create_table(
+            "localhost",
+            28817,
+            "vscode",
+            "password", // TODO
+            "pg_mooncake",
+            schema.as_str(),
+            table.as_str(),
+        )
+        .await? as i64;
+    write(stream, &table_id).await
+}
+
+async fn scan_table_begin(stream: &mut UnixStream, _schame: String, _table: String) -> Result<()> {
+    let (data_files, position_deletes) = BACKEND.scan_table_begin(0).await?; // TODO
     let metadata = TableMetadata {
-        data_files: vec![
-            "/home/vscode/1.parquet".to_owned(),
-            "/home/vscode/2.parquet".to_owned(),
-        ],
-        position_deletes: vec![(1, 0)],
+        data_files,
+        position_deletes,
     };
     let bytes = bincode::encode_to_vec(metadata, BINCODE_CONFIG)?;
     write(stream, &bytes).await
 }
 
-async fn scan_end(stream: &mut UnixStream, _schame: String, _table: String) -> Result<()> {
+async fn scan_table_end(stream: &mut UnixStream, _schame: String, _table: String) -> Result<()> {
     write(stream, &()).await
 }
 

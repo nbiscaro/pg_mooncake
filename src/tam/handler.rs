@@ -51,7 +51,7 @@ static mut MOONCAKE_METHODS: pg_sys::TableAmRoutine = pg_sys::TableAmRoutine {
 };
 
 #[no_mangle]
-extern "C" fn is_mooncake_table_am(am: *const pg_sys::TableAmRoutine) -> bool {
+extern "C-unwind" fn is_mooncake_table_am(am: *const pg_sys::TableAmRoutine) -> bool {
     std::ptr::eq(am, std::ptr::addr_of_mut!(MOONCAKE_METHODS))
 }
 
@@ -59,14 +59,14 @@ extern "C" fn is_mooncake_table_am(am: *const pg_sys::TableAmRoutine) -> bool {
 CREATE FUNCTION mooncake_am_handler(internal) RETURNS table_am_handler LANGUAGE c AS 'MODULE_PATHNAME', '@FUNCTION_NAME@';
 CREATE ACCESS METHOD mooncake TYPE TABLE HANDLER mooncake_am_handler;
 ")]
-extern "C" fn mooncake_am_handler(
+extern "C-unwind" fn mooncake_am_handler(
     _fcinfo: pg_sys::FunctionCallInfo,
 ) -> PgBox<pg_sys::TableAmRoutine> {
     unsafe { PgBox::from_pg(std::ptr::addr_of_mut!(MOONCAKE_METHODS)) }
 }
 
 #[pg_guard]
-extern "C" fn mooncake_slot_callbacks(_rel: pg_sys::Relation) -> *const pg_sys::TupleTableSlotOps {
+extern "C-unwind" fn mooncake_slot_callbacks(_rel: pg_sys::Relation) -> *const pg_sys::TupleTableSlotOps {
     unsafe { &pg_sys::TTSOpsMinimalTuple }
 }
 
@@ -77,7 +77,7 @@ struct MooncakeScanDescData {
 type MooncakeScanDesc = *mut MooncakeScanDescData;
 
 #[pg_guard]
-extern "C" fn mooncake_scan_begin(
+extern "C-unwind" fn mooncake_scan_begin(
     rel: pg_sys::Relation,
     snapshot: pg_sys::Snapshot,
     nkeys: c_int,
@@ -95,12 +95,12 @@ extern "C" fn mooncake_scan_begin(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_scan_end(scan: pg_sys::TableScanDesc) {
+extern "C-unwind" fn mooncake_scan_end(scan: pg_sys::TableScanDesc) {
     unsafe { PgBox::<MooncakeScanDescData>::from_rust(scan as MooncakeScanDesc) };
 }
 
 #[pg_guard]
-extern "C" fn mooncake_scan_rescan(
+extern "C-unwind" fn mooncake_scan_rescan(
     _scan: pg_sys::TableScanDesc,
     _key: *mut pg_sys::ScanKeyData,
     _set_params: bool,
@@ -112,7 +112,7 @@ extern "C" fn mooncake_scan_rescan(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_scan_getnextslot(
+extern "C-unwind" fn mooncake_scan_getnextslot(
     _scan: pg_sys::TableScanDesc,
     _direction: pg_sys::ScanDirection::Type,
     _slot: *mut pg_sys::TupleTableSlot,
@@ -121,7 +121,7 @@ extern "C" fn mooncake_scan_getnextslot(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_scan_set_tidrange(
+extern "C-unwind" fn mooncake_scan_set_tidrange(
     _scan: pg_sys::TableScanDesc,
     _mintid: pg_sys::ItemPointer,
     _maxtid: pg_sys::ItemPointer,
@@ -130,7 +130,7 @@ extern "C" fn mooncake_scan_set_tidrange(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_scan_getnextslot_tidrange(
+extern "C-unwind" fn mooncake_scan_getnextslot_tidrange(
     _scan: pg_sys::TableScanDesc,
     _direction: pg_sys::ScanDirection::Type,
     _slot: *mut pg_sys::TupleTableSlot,
@@ -139,12 +139,12 @@ extern "C" fn mooncake_scan_getnextslot_tidrange(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_parallelscan_estimate(_rel: pg_sys::Relation) -> pg_sys::Size {
+extern "C-unwind" fn mooncake_parallelscan_estimate(_rel: pg_sys::Relation) -> pg_sys::Size {
     unimplemented!("mooncake_parallelscan_estimate");
 }
 
 #[pg_guard]
-extern "C" fn mooncake_parallelscan_initialize(
+extern "C-unwind" fn mooncake_parallelscan_initialize(
     _rel: pg_sys::Relation,
     _pscan: pg_sys::ParallelTableScanDesc,
 ) -> pg_sys::Size {
@@ -152,7 +152,7 @@ extern "C" fn mooncake_parallelscan_initialize(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_parallelscan_reinitialize(
+extern "C-unwind" fn mooncake_parallelscan_reinitialize(
     _rel: pg_sys::Relation,
     _pscan: pg_sys::ParallelTableScanDesc,
 ) {
@@ -160,24 +160,24 @@ extern "C" fn mooncake_parallelscan_reinitialize(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_index_fetch_begin(
+extern "C-unwind" fn mooncake_index_fetch_begin(
     _rel: pg_sys::Relation,
 ) -> *mut pg_sys::IndexFetchTableData {
     unimplemented!("mooncake_index_fetch_begin");
 }
 
 #[pg_guard]
-extern "C" fn mooncake_index_fetch_reset(_data: *mut pg_sys::IndexFetchTableData) {
+extern "C-unwind" fn mooncake_index_fetch_reset(_data: *mut pg_sys::IndexFetchTableData) {
     unimplemented!("mooncake_index_fetch_reset");
 }
 
 #[pg_guard]
-extern "C" fn mooncake_index_fetch_end(_data: *mut pg_sys::IndexFetchTableData) {
+extern "C-unwind" fn mooncake_index_fetch_end(_data: *mut pg_sys::IndexFetchTableData) {
     unimplemented!("mooncake_index_fetch_end");
 }
 
 #[pg_guard]
-extern "C" fn mooncake_index_fetch_tuple(
+extern "C-unwind" fn mooncake_index_fetch_tuple(
     _scan: *mut pg_sys::IndexFetchTableData,
     _tid: pg_sys::ItemPointer,
     _snapshot: pg_sys::Snapshot,
@@ -189,7 +189,7 @@ extern "C" fn mooncake_index_fetch_tuple(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_tuple_fetch_row_version(
+extern "C-unwind" fn mooncake_tuple_fetch_row_version(
     _rel: pg_sys::Relation,
     _tid: pg_sys::ItemPointer,
     _snapshot: pg_sys::Snapshot,
@@ -199,7 +199,7 @@ extern "C" fn mooncake_tuple_fetch_row_version(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_tuple_tid_valid(
+extern "C-unwind" fn mooncake_tuple_tid_valid(
     _scan: pg_sys::TableScanDesc,
     _tid: pg_sys::ItemPointer,
 ) -> bool {
@@ -207,7 +207,7 @@ extern "C" fn mooncake_tuple_tid_valid(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_tuple_get_latest_tid(
+extern "C-unwind" fn mooncake_tuple_get_latest_tid(
     _scan: pg_sys::TableScanDesc,
     _tid: pg_sys::ItemPointer,
 ) {
@@ -215,7 +215,7 @@ extern "C" fn mooncake_tuple_get_latest_tid(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_tuple_satisfies_snapshot(
+extern "C-unwind" fn mooncake_tuple_satisfies_snapshot(
     _rel: pg_sys::Relation,
     _slot: *mut pg_sys::TupleTableSlot,
     _snapshot: pg_sys::Snapshot,
@@ -224,7 +224,7 @@ extern "C" fn mooncake_tuple_satisfies_snapshot(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_index_delete_tuples(
+extern "C-unwind" fn mooncake_index_delete_tuples(
     _rel: pg_sys::Relation,
     _delstate: *mut pg_sys::TM_IndexDeleteOp,
 ) -> pg_sys::TransactionId {
@@ -232,7 +232,7 @@ extern "C" fn mooncake_index_delete_tuples(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_tuple_insert(
+extern "C-unwind" fn mooncake_tuple_insert(
     _rel: pg_sys::Relation,
     _slot: *mut pg_sys::TupleTableSlot,
     _cid: pg_sys::CommandId,
@@ -243,7 +243,7 @@ extern "C" fn mooncake_tuple_insert(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_tuple_insert_speculative(
+extern "C-unwind" fn mooncake_tuple_insert_speculative(
     _rel: pg_sys::Relation,
     _slot: *mut pg_sys::TupleTableSlot,
     _cid: pg_sys::CommandId,
@@ -255,7 +255,7 @@ extern "C" fn mooncake_tuple_insert_speculative(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_tuple_complete_speculative(
+extern "C-unwind" fn mooncake_tuple_complete_speculative(
     _rel: pg_sys::Relation,
     _slot: *mut pg_sys::TupleTableSlot,
     _spec_token: pg_sys::uint32,
@@ -265,7 +265,7 @@ extern "C" fn mooncake_tuple_complete_speculative(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_multi_insert(
+extern "C-unwind" fn mooncake_multi_insert(
     _rel: pg_sys::Relation,
     _slots: *mut *mut pg_sys::TupleTableSlot,
     _nslots: c_int,
@@ -277,7 +277,7 @@ extern "C" fn mooncake_multi_insert(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_tuple_delete(
+extern "C-unwind" fn mooncake_tuple_delete(
     _rel: pg_sys::Relation,
     _tid: pg_sys::ItemPointer,
     _cid: pg_sys::CommandId,
@@ -291,7 +291,7 @@ extern "C" fn mooncake_tuple_delete(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_tuple_update(
+extern "C-unwind" fn mooncake_tuple_update(
     _rel: pg_sys::Relation,
     _otid: pg_sys::ItemPointer,
     _slot: *mut pg_sys::TupleTableSlot,
@@ -307,7 +307,7 @@ extern "C" fn mooncake_tuple_update(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_tuple_lock(
+extern "C-unwind" fn mooncake_tuple_lock(
     _rel: pg_sys::Relation,
     _tid: pg_sys::ItemPointer,
     _snapshot: pg_sys::Snapshot,
@@ -322,12 +322,12 @@ extern "C" fn mooncake_tuple_lock(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_finish_bulk_insert(_rel: pg_sys::Relation, _options: c_int) {
+extern "C-unwind" fn mooncake_finish_bulk_insert(_rel: pg_sys::Relation, _options: c_int) {
     unimplemented!("mooncake_finish_bulk_insert");
 }
 
 #[pg_guard]
-extern "C" fn mooncake_relation_set_new_filelocator(
+extern "C-unwind" fn mooncake_relation_set_new_filelocator(
     _rel: pg_sys::Relation,
     _newrlocator: *const pg_sys::RelFileLocator,
     _persistence: c_char,
@@ -338,12 +338,12 @@ extern "C" fn mooncake_relation_set_new_filelocator(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_relation_nontransactional_truncate(_rel: pg_sys::Relation) {
+extern "C-unwind" fn mooncake_relation_nontransactional_truncate(_rel: pg_sys::Relation) {
     // TODO
 }
 
 #[pg_guard]
-extern "C" fn mooncake_relation_copy_data(
+extern "C-unwind" fn mooncake_relation_copy_data(
     _rel: pg_sys::Relation,
     _newrlocator: *const pg_sys::RelFileLocator,
 ) {
@@ -351,7 +351,7 @@ extern "C" fn mooncake_relation_copy_data(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_relation_copy_for_cluster(
+extern "C-unwind" fn mooncake_relation_copy_for_cluster(
     _old_table: pg_sys::Relation,
     _new_table: pg_sys::Relation,
     _old_index: pg_sys::Relation,
@@ -367,7 +367,7 @@ extern "C" fn mooncake_relation_copy_for_cluster(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_relation_vacuum(
+extern "C-unwind" fn mooncake_relation_vacuum(
     _rel: pg_sys::Relation,
     _params: *mut pg_sys::VacuumParams,
     _bstrategy: pg_sys::BufferAccessStrategy,
@@ -376,7 +376,7 @@ extern "C" fn mooncake_relation_vacuum(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_scan_analyze_next_block(
+extern "C-unwind" fn mooncake_scan_analyze_next_block(
     _scan: pg_sys::TableScanDesc,
     _stream: *mut pg_sys::ReadStream,
 ) -> bool {
@@ -384,7 +384,7 @@ extern "C" fn mooncake_scan_analyze_next_block(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_scan_analyze_next_tuple(
+extern "C-unwind" fn mooncake_scan_analyze_next_tuple(
     _scan: pg_sys::TableScanDesc,
     _oldest_xmin: pg_sys::TransactionId,
     _liverows: *mut f64,
@@ -395,7 +395,7 @@ extern "C" fn mooncake_scan_analyze_next_tuple(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_index_build_range_scan(
+extern "C-unwind" fn mooncake_index_build_range_scan(
     _table_rel: pg_sys::Relation,
     _index_rel: pg_sys::Relation,
     _index_info: *mut pg_sys::IndexInfo,
@@ -412,7 +412,7 @@ extern "C" fn mooncake_index_build_range_scan(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_index_validate_scan(
+extern "C-unwind" fn mooncake_index_validate_scan(
     _table_rel: pg_sys::Relation,
     _index_rel: pg_sys::Relation,
     _index_info: *mut pg_sys::IndexInfo,
@@ -423,7 +423,7 @@ extern "C" fn mooncake_index_validate_scan(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_relation_size(
+extern "C-unwind" fn mooncake_relation_size(
     _rel: pg_sys::Relation,
     _fork_number: pg_sys::ForkNumber::Type,
 ) -> pg_sys::uint64 {
@@ -431,17 +431,17 @@ extern "C" fn mooncake_relation_size(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_relation_needs_toast_table(_rel: pg_sys::Relation) -> bool {
+extern "C-unwind" fn mooncake_relation_needs_toast_table(_rel: pg_sys::Relation) -> bool {
     false
 }
 
 #[pg_guard]
-extern "C" fn mooncake_relation_toast_am(_rel: pg_sys::Relation) -> pg_sys::Oid {
+extern "C-unwind" fn mooncake_relation_toast_am(_rel: pg_sys::Relation) -> pg_sys::Oid {
     unimplemented!("mooncake_relation_toast_am");
 }
 
 #[pg_guard]
-extern "C" fn mooncake_relation_fetch_toast_slice(
+extern "C-unwind" fn mooncake_relation_fetch_toast_slice(
     _toastrel: pg_sys::Relation,
     _valueid: pg_sys::Oid,
     _attrsize: pg_sys::int32,
@@ -453,7 +453,7 @@ extern "C" fn mooncake_relation_fetch_toast_slice(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_relation_estimate_size(
+extern "C-unwind" fn mooncake_relation_estimate_size(
     _rel: pg_sys::Relation,
     attr_widths: *mut pg_sys::int32,
     pages: *mut pg_sys::BlockNumber,
@@ -475,7 +475,7 @@ extern "C" fn mooncake_relation_estimate_size(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_scan_bitmap_next_block(
+extern "C-unwind" fn mooncake_scan_bitmap_next_block(
     _scan: pg_sys::TableScanDesc,
     _tbmres: *mut pg_sys::TBMIterateResult,
 ) -> bool {
@@ -483,7 +483,7 @@ extern "C" fn mooncake_scan_bitmap_next_block(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_scan_bitmap_next_tuple(
+extern "C-unwind" fn mooncake_scan_bitmap_next_tuple(
     _scan: pg_sys::TableScanDesc,
     _tbmres: *mut pg_sys::TBMIterateResult,
     _slot: *mut pg_sys::TupleTableSlot,
@@ -492,7 +492,7 @@ extern "C" fn mooncake_scan_bitmap_next_tuple(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_scan_sample_next_block(
+extern "C-unwind" fn mooncake_scan_sample_next_block(
     _scan: pg_sys::TableScanDesc,
     _scanstate: *mut pg_sys::SampleScanState,
 ) -> bool {
@@ -500,7 +500,7 @@ extern "C" fn mooncake_scan_sample_next_block(
 }
 
 #[pg_guard]
-extern "C" fn mooncake_scan_sample_next_tuple(
+extern "C-unwind" fn mooncake_scan_sample_next_tuple(
     _scan: pg_sys::TableScanDesc,
     _scanstate: *mut pg_sys::SampleScanState,
     _slot: *mut pg_sys::TupleTableSlot,

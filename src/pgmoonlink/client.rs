@@ -8,15 +8,21 @@ use std::sync::{LazyLock, Mutex};
 static STREAM: LazyLock<Mutex<UnixStream>> =
     LazyLock::new(|| Mutex::new(UnixStream::connect(SOCKET_PATH).unwrap()));
 
-pub(super) fn scan_begin(schema: String, table: String) -> Result<Vec<u8>> {
+pub fn create_table(schema: String, table: String) -> Result<i64> {
     let mut stream = STREAM.lock().unwrap();
-    write(&mut stream, &Request::ScanBegin { schema, table })?;
+    write(&mut stream, &Request::CreateTable { schema, table })?;
     read(&mut stream)
 }
 
-pub(super) fn scan_end(schema: String, table: String) -> Result<()> {
+pub(super) fn scan_table_begin(schema: String, table: String) -> Result<Vec<u8>> {
     let mut stream = STREAM.lock().unwrap();
-    write(&mut stream, &Request::ScanEnd { schema, table })?;
+    write(&mut stream, &Request::ScanTableBegin { schema, table })?;
+    read(&mut stream)
+}
+
+pub(super) fn scan_table_end(schema: String, table: String) -> Result<()> {
+    let mut stream = STREAM.lock().unwrap();
+    write(&mut stream, &Request::ScanTableEnd { schema, table })?;
     read(&mut stream)
 }
 

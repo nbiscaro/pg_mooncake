@@ -21,12 +21,13 @@ pg_test = []
 
 [dependencies]
 bincode = "2"
-pgrx = "0.13.1"
+moonlink_backend = { version = "0.0.1", path = "moonlink/rust/moonlink_backend" }
+pgrx = "0.14"
 thiserror = "2"
 tokio = { version = "1.44", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal"] }
 
 [dev-dependencies]
-pgrx-tests = "0.13.1"
+pgrx-tests = "0.14"
 
 [profile.dev]
 panic = "unwind"

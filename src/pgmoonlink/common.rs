@@ -6,6 +6,7 @@ pub(super) const SOCKET_PATH: &str = "pg_moonlink.sock";
 
 #[derive(Debug, Encode, Decode)]
 pub(super) enum Request {
-    ScanBegin { schema: String, table: String },
-    ScanEnd { schema: String, table: String },
+    CreateTable { schema: String, table: String },
+    ScanTableBegin { schema: String, table: String },
+    ScanTableEnd { schema: String, table: String },
 }

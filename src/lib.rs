@@ -1,7 +1,6 @@
-mod create_table;
 mod error;
 mod pgmoonlink;
-mod table_am;
+mod tam;
 
 use pgrx::prelude::*;
 
@@ -13,7 +12,7 @@ extern "C" {
 }
 
 #[pg_guard]
-extern "C" fn _PG_init() {
+extern "C-unwind" fn _PG_init() {
     unsafe { pgduckdb_init() };
     pgmoonlink::init();
 }
