@@ -33,30 +33,23 @@ pub(super) async fn start() -> Result<()> {
 async fn handle_stream(mut stream: UnixStream) -> Result<()> {
     loop {
         match read(&mut stream).await? {
-            Request::CreateTable { schema, table, uri } => {
-                create_table(&mut stream, schema, table, uri).await?
-            }
-            Request::ScanTableBegin { schema, table } => {
-                scan_table_begin(&mut stream, schema, table).await?
-            }
-            Request::ScanTableEnd { schema, table } => {
-                scan_table_end(&mut stream, schema, table).await?
-            }
+            Request::CreateTable {
+                table_id,
+                schema,
+                table,
+            } => create_table(&mut stream, table_id, schema, table).await?,
+            Request::ScanTableBegin { table_id } => scan_table_begin(&mut stream, table_id).await?,
+            Request::ScanTableEnd { table_id } => scan_table_end(&mut stream, table_id).await?,
         }
     }
 }
 
 async fn create_table(
     stream: &mut UnixStream,
+    table_id: TableId,
     schema: String,
     table: String,
-    uri: String,
 ) -> Result<()> {
-    let table_id = TableId {
-        database: "pg_mooncake".to_owned(),
-        schema,
-        table,
-    };
     BACKEND
         .create_table(
             table_id,
@@ -65,19 +58,14 @@ async fn create_table(
             "vscode",
             "password", // TODO
             "pg_mooncake",
-            "public",
-            &uri,
+            &schema,
+            &table,
         )
         .await?;
     write(stream, &()).await
 }
 
-async fn scan_table_begin(stream: &mut UnixStream, schema: String, table: String) -> Result<()> {
-    let table_id = TableId {
-        database: "pg_mooncake".to_owned(),
-        schema,
-        table,
-    };
+async fn scan_table_begin(stream: &mut UnixStream, table_id: TableId) -> Result<()> {
     let (data_files, position_deletes) = BACKEND.scan_table(table_id).await?; // TODO
     let metadata = TableMetadata {
         data_files,
@@ -87,7 +75,7 @@ async fn scan_table_begin(stream: &mut UnixStream, schema: String, table: String
     write(stream, &bytes).await
 }
 
-async fn scan_table_end(stream: &mut UnixStream, _schema: String, _table: String) -> Result<()> {
+async fn scan_table_end(stream: &mut UnixStream, _table_id: TableId) -> Result<()> {
     write(stream, &()).await
 }
 

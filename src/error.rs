@@ -12,12 +12,6 @@ pub enum Error {
     #[error("format error: {0}")]
     FormatError(#[from] std::fmt::Error),
 
-    #[error("internal error: {0}")]
-    Internal(String),
-
-    #[error("invalid input: {0}")]
-    Invalid(String),
-
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 

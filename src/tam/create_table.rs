@@ -1,26 +1,21 @@
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::pgmoonlink;
 use pgrx::prelude::*;
-use postgres::{Client, NoTls, SimpleQueryMessage};
+use postgres::{Client, NoTls};
 
 #[pg_extern]
-fn create_mooncake_table(table: &str, uri: &str) {
-    create_table(table, uri).unwrap()
+fn create_mooncake_table(dst: &str, src: &str) {
+    // TODO: allow uri
+    let uri = "postgresql://vscode@localhost:28817/pg_mooncake";
+    create_table(dst, src, uri).unwrap()
 }
 
-fn create_table(table: &str, uri: &str) -> Result<()> {
+fn create_table(dst: &str, src: &str, uri: &str) -> Result<()> {
+    // TODO: allow schema in dst and src
     let schema = "public";
-    let mut client = Client::connect("postgresql://vscode@localhost:28817/pg_mooncake", NoTls)?;
-    let create_table_query = format!(
-        "CREATE TABLE {} ({}) USING mooncake",
-        spi::quote_identifier(&table),
-        get_columns(&mut client, schema, uri)?
-    );
-    client.simple_query(&create_table_query)?;
-    pgmoonlink::create_table(schema.to_owned(), table.to_owned(), uri.to_owned())
-}
+    // TODO: uri is only for src
+    let mut client = Client::connect(uri, NoTls)?;
 
-fn get_columns(client: &mut Client, schema: &str, uri: &str) -> Result<String> {
     let get_columns_query = format!(
         "SELECT string_agg(
             format(
@@ -39,18 +34,25 @@ fn get_columns(client: &mut Client, schema: &str, uri: &str) -> Result<String> {
           AND a.attnum > 0
           AND NOT a.attisdropped",
         spi::quote_identifier(schema),
-        spi::quote_identifier(uri)
+        spi::quote_identifier(src)
     );
-    for message in client.simple_query(&get_columns_query)? {
-        if let SimpleQueryMessage::Row(row) = message {
-            return row
-                .get("columns")
-                .map(str::to_owned)
-                .ok_or_else(|| Error::Internal("column 'columns' not found".to_owned()));
-        }
-    }
-    Err(Error::Invalid(format!(
-        "table '{}' not found",
-        spi::quote_identifier(schema)
-    )))
+    let columns: String = client.query_one(&get_columns_query, &[])?.get(0);
+
+    let create_table_query = format!(
+        "CREATE TABLE {}.{} ({}) USING mooncake",
+        spi::quote_identifier(schema),
+        spi::quote_identifier(dst),
+        columns
+    );
+    client.simple_query(&create_table_query)?;
+
+    let get_table_id_query = format!(
+        "SELECT '{}.{}'::regclass::oid",
+        spi::quote_identifier(schema),
+        spi::quote_identifier(dst),
+    );
+    let table_id = client.query_one(&get_table_id_query, &[])?.get(0);
+
+    let database_id = unsafe { pgrx::pg_sys::MyDatabaseId.to_u32() };
+    pgmoonlink::create_table(database_id, table_id, schema.to_owned(), src.to_owned())
 }

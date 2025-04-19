@@ -8,21 +8,32 @@ use std::sync::{LazyLock, Mutex};
 static STREAM: LazyLock<Mutex<UnixStream>> =
     LazyLock::new(|| Mutex::new(UnixStream::connect(SOCKET_PATH).unwrap()));
 
-pub fn create_table(schema: String, table: String, uri: String) -> Result<()> {
+pub fn create_table(database_id: u32, table_id: u32, schema: String, table: String) -> Result<()> {
     let mut stream = STREAM.lock().unwrap();
-    write(&mut stream, &Request::CreateTable { schema, table, uri })?;
+    let table_id = TableId {
+        database_id,
+        table_id,
+    };
+    write(
+        &mut stream,
+        &Request::CreateTable {
+            table_id,
+            schema,
+            table,
+        },
+    )?;
     read(&mut stream)
 }
 
-pub(super) fn scan_table_begin(schema: String, table: String) -> Result<Vec<u8>> {
+pub(super) fn scan_table_begin(table_id: TableId) -> Result<Vec<u8>> {
     let mut stream = STREAM.lock().unwrap();
-    write(&mut stream, &Request::ScanTableBegin { schema, table })?;
+    write(&mut stream, &Request::ScanTableBegin { table_id })?;
     read(&mut stream)
 }
 
-pub(super) fn scan_table_end(schema: String, table: String) -> Result<()> {
+pub(super) fn scan_table_end(table_id: TableId) -> Result<()> {
     let mut stream = STREAM.lock().unwrap();
-    write(&mut stream, &Request::ScanTableEnd { schema, table })?;
+    write(&mut stream, &Request::ScanTableEnd { table_id })?;
     read(&mut stream)
 }
 
