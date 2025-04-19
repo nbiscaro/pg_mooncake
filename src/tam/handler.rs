@@ -66,7 +66,9 @@ extern "C-unwind" fn mooncake_am_handler(
 }
 
 #[pg_guard]
-extern "C-unwind" fn mooncake_slot_callbacks(_rel: pg_sys::Relation) -> *const pg_sys::TupleTableSlotOps {
+extern "C-unwind" fn mooncake_slot_callbacks(
+    _rel: pg_sys::Relation,
+) -> *const pg_sys::TupleTableSlotOps {
     unsafe { &pg_sys::TTSOpsMinimalTuple }
 }
 

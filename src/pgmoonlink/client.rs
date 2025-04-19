@@ -8,9 +8,9 @@ use std::sync::{LazyLock, Mutex};
 static STREAM: LazyLock<Mutex<UnixStream>> =
     LazyLock::new(|| Mutex::new(UnixStream::connect(SOCKET_PATH).unwrap()));
 
-pub fn create_table(schema: String, table: String) -> Result<i64> {
+pub fn create_table(schema: String, table: String, uri: String) -> Result<()> {
     let mut stream = STREAM.lock().unwrap();
-    write(&mut stream, &Request::CreateTable { schema, table })?;
+    write(&mut stream, &Request::CreateTable { schema, table, uri })?;
     read(&mut stream)
 }
 

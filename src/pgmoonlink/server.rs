@@ -9,7 +9,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::signal::unix::{signal, SignalKind};
 
-static BACKEND: LazyLock<MoonlinkBackend> = LazyLock::new(|| MoonlinkBackend::new());
+static BACKEND: LazyLock<MoonlinkBackend<TableId>> = LazyLock::new(|| MoonlinkBackend::new());
 
 #[tokio::main]
 pub(super) async fn start() -> Result<()> {
@@ -33,8 +33,8 @@ pub(super) async fn start() -> Result<()> {
 async fn handle_stream(mut stream: UnixStream) -> Result<()> {
     loop {
         match read(&mut stream).await? {
-            Request::CreateTable { schema, table } => {
-                create_table(&mut stream, schema, table).await?
+            Request::CreateTable { schema, table, uri } => {
+                create_table(&mut stream, schema, table, uri).await?
             }
             Request::ScanTableBegin { schema, table } => {
                 scan_table_begin(&mut stream, schema, table).await?
@@ -46,23 +46,39 @@ async fn handle_stream(mut stream: UnixStream) -> Result<()> {
     }
 }
 
-async fn create_table(stream: &mut UnixStream, schema: String, table: String) -> Result<()> {
-    let table_id = BACKEND
+async fn create_table(
+    stream: &mut UnixStream,
+    schema: String,
+    table: String,
+    uri: String,
+) -> Result<()> {
+    let table_id = TableId {
+        database: "pg_mooncake".to_owned(),
+        schema,
+        table,
+    };
+    BACKEND
         .create_table(
+            table_id,
             "localhost",
             28817,
             "vscode",
             "password", // TODO
             "pg_mooncake",
-            schema.as_str(),
-            table.as_str(),
+            "public",
+            &uri,
         )
-        .await? as i64;
-    write(stream, &table_id).await
+        .await?;
+    write(stream, &()).await
 }
 
-async fn scan_table_begin(stream: &mut UnixStream, _schame: String, _table: String) -> Result<()> {
-    let (data_files, position_deletes) = BACKEND.scan_table_begin(0).await?; // TODO
+async fn scan_table_begin(stream: &mut UnixStream, schema: String, table: String) -> Result<()> {
+    let table_id = TableId {
+        database: "pg_mooncake".to_owned(),
+        schema,
+        table,
+    };
+    let (data_files, position_deletes) = BACKEND.scan_table(table_id).await?; // TODO
     let metadata = TableMetadata {
         data_files,
         position_deletes,
@@ -71,7 +87,7 @@ async fn scan_table_begin(stream: &mut UnixStream, _schame: String, _table: Stri
     write(stream, &bytes).await
 }
 
-async fn scan_table_end(stream: &mut UnixStream, _schame: String, _table: String) -> Result<()> {
+async fn scan_table_end(stream: &mut UnixStream, _schema: String, _table: String) -> Result<()> {
     write(stream, &()).await
 }
 
