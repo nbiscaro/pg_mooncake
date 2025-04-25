@@ -12,7 +12,7 @@ RUN apt update \
 
 USER vscode
 
-RUN cargo install --locked cargo-pgrx \
+RUN cargo install cargo-pgrx --version 0.14.1 --locked \
  && cargo pgrx init
 
 RUN echo '\\i /workspaces/pg_mooncake/.devcontainer/.psqlrc' > ~/.psqlrc
